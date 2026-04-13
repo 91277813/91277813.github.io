@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>打开抖音 · 抖音短视频</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      color: #1e1e2a;
+    }
+
+    .card {
+      max-width: 400px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: #ffffffdd;
+      border-radius: 36px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), 0 6px 12px rgba(0, 0, 0, 0.05);
+      padding: 32px 24px 36px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: all 0.2s;
+    }
+
+    /* 抖音风格点缀 */
+    .app-icon {
+      width: 88px;
+      height: 88px;
+      margin: 0 auto 20px;
+      background: linear-gradient(145deg, #010101 0%, #1a1a1a 100%);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 12px 18px -6px rgba(0, 0, 0, 0.2);
+      position: relative;
+      border: 2px solid rgba(255, 255, 255, 0.6);
+    }
+
+    .app-icon::before {
+      content: "♪";
+      font-size: 48px;
+      color: white;
+      font-weight: 500;
+      text-shadow: 0 2px 8px #00f2fe;
+      transform: rotate(6deg);
+    }
+
+    .app-icon::after {
+      content: "";
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 20px;
+      height: 20px;
+      background: #fe2c55;
+      border-radius: 6px;
+      opacity: 0.9;
+      box-shadow: 0 0 0 3px rgba(254, 44, 85, 0.2);
+    }
+
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+      color: #111;
+    }
+
+    .sub-title {
+      font-size: 15px;
+      color: #5e5e6e;
+      margin-bottom: 28px;
+      font-weight: 400;
+    }
+
+    /* 普通浏览器内容 */
+    .browser-content {
+      display: block;
+    }
+
+    .status-area {
+      margin: 16px 0 8px;
+      min-height: 60px;
+    }
+
+    .loading-text {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #2c2c3a;
+      font-size: 16px;
+      font-weight: 500;
+      padding: 8px;
+    }
+
+    .loading-dots {
+      display: inline-flex;
+      gap: 4px;
+    }
+    .loading-dots span {
+      width: 6px;
+      height: 6px;
+      background: #aaa;
+      border-radius: 6px;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+    .loading-dots span:nth-child(1) { animation-delay: -0.32s; background: #fe2c55; }
+    .loading-dots span:nth-child(2) { animation-delay: -0.16s; background: #ff5e7a; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    .fail-message {
+      color: #8e8e98;
+      font-size: 15px;
+      margin: 6px 0 16px;
+    }
+
+    .blue-link-btn {
+      display: inline-block;
+      background: none;
+      border: none;
+      color: #1967d2;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 12px 24px;
+      border-radius: 60px;
+      background: rgba(25, 103, 210, 0.08);
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+      border: 1px solid transparent;
+      margin: 8px 0 4px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .blue-link-btn:hover {
+      background: rgba(25, 103, 210, 0.15);
+    }
+    .blue-link-btn:active {
+      transform: scale(0.97);
+      background: rgba(25, 103, 210, 0.2);
+    }
+
+    .manual-tip {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #8a8a98;
+    }
+
+    .divider {
+      margin: 18px 0 12px;
+      height: 1px;
+      background: radial-gradient(circle, #ccc 30%, transparent 100%);
+    }
+
+    /* 微信/QQ 专用提示 —— 箭头 + 文字 */
+    .wechat-warning {
+      display: none;  /* 默认隐藏 */
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .arrow-container {
+      margin: 16px 0 20px;
+      position: relative;
+    }
+
+    /* 箭头SVG —— 优雅地指向右上角 */
+    .arrow-svg {
+      width: 140px;
+      height: 120px;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05));
+    }
+
+    .browser-hint-text {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1e1e2a;
+      margin: 16px 0 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .browser-hint-sub {
+      font-size: 15px;
+      color: #6b6b7a;
+      margin-bottom: 24px;
+      max-width: 260px;
+      line-height: 1.5;
+    }
+
+    .dot-menu-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #e9e9ef;
+      padding: 6px 14px;
+      border-radius: 40px;
+      font-size: 15px;
+      color: #3a3a4a;
+      margin-top: 6px;
+    }
+    .dot-menu-icon span {
+      font-size: 22px;
+      margin-right: 6px;
+      line-height: 1;
+    }
+
+    /* 隐藏辅助 */
+    .hidden {
+      display: none !important;
+    }
+
+    .footer-note {
+      margin-top: 28px;
+      font-size: 12px;
+      color: #a6a6b8;
+    }
+
+    /* 移动端点击优化 */
+    button {
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <!-- 抖音图标 + 标题 -->
+  <div class="app-icon"></div>
+  <h2>抖音</h2>
+  <div class="sub-title">记录美好生活</div>
+
+  <!-- 普通浏览器界面 (默认显示) -->
+  <div id="browserMode" class="browser-content">
+    <div class="status-area">
+      <div id="loadingIndicator" class="loading-text">
+        <span>正在打开抖音</span>
+        <span class="loading-dots">
+          <span></span><span></span><span></span>
+        </span>
+      </div>
+      <div id="failMessageBlock" class="fail-message hidden">
+        未检测到跳转？试试手动打开
+      </div>
+    </div>
+
+    <!-- 一键跳转蓝色按钮 (失败后显示) -->
+    <button id="manualJumpBtn" class="blue-link-btn hidden">
+      点击一键跳转
+    </button>
+
+    <!-- 下载提示(可选, 仅装饰) -->
+    <div class="manual-tip" id="extraHint">
+      若未安装抖音，请前往应用商店下载
+    </div>
+    <div class="divider"></div>
+    <div class="footer-note">
+      com.ss.android.ugc.aweme
+    </div>
+  </div>
+
+  <!-- 微信/QQ 专用提示界面 (默认隐藏) -->
+  <div id="wechatMode" class="wechat-warning">
+    <div class="arrow-container">
+      <!-- 箭头SVG : 指向右上角，示意菜单按钮 -->
+      <svg class="arrow-svg" viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#1e1e2a" />
+          </marker>
+        </defs>
+        <!-- 曲线箭头: 从左下指向右上 -->
+        <path d="M25,80 C35,50 55,35 85,20" stroke="#1e1e2a" stroke-width="4.5" stroke-linecap="round" fill="none" marker-end="url(#arrowHead)" />
+        <!-- 装饰小点（右上角三个点暗示） -->
+        <circle cx="92" cy="15" r="3.5" fill="#1e1e2a" />
+        <circle cx="102" cy="15" r="3.5" fill="#1e1e2a" />
+        <circle cx="112" cy="15" r="3.5" fill="#1e1e2a" />
+        <!-- 手机边框示意 -->
+        <rect x="8" y="22" width="78" height="70" rx="12" stroke="#b0b0c0" stroke-width="2.5" fill="none" stroke-dasharray="4 3" opacity="0.5"/>
+      </svg>
+    </div>
+    <div class="browser-hint-text">
+      ⚡ 请用浏览器打开
+    </div>
+    <div class="browser-hint-sub">
+      点击右上角 ··· 选择<span style="font-weight:600;">「在浏览器打开」</span>
+    </div>
+    <div class="dot-menu-icon">
+      <span>⋯</span> 浏览器打开
+    </div>
+    <div style="margin-top: 24px; font-size: 14px; color:#888;">
+      com.ss.android.ugc.aweme
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    "use strict";
+
+    // 抖音包名对应的scheme (常用snssdk1128, 同时兼容 intent)
+    const DOUYIN_SCHEME = 'snssdk1128://';
+    // 备选 scheme 有时也用 aweme:// , 但snssdk1128通用性好
+    const FALLBACK_SCHEME = 'aweme://';
+    
+    // 包名用于展示
+    const PACKAGE_NAME = 'com.ss.android.ugc.aweme';
+
+    // DOM 元素
+    const browserModeDiv = document.getElementById('browserMode');
+    const wechatModeDiv = document.getElementById('wechatMode');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const failMessageBlock = document.getElementById('failMessageBlock');
+    const manualJumpBtn = document.getElementById('manualJumpBtn');
+    const extraHint = document.getElementById('extraHint');
+
+    // 状态变量
+    let isWechatOrQQ = false;
+    let launchTimer = null;
+    let hasBlurred = false;      // 是否触发了blur(跳转成功特征)
+    let isManualRetry = false;   // 手动点击重试标记
+
+    // ---------- UA 检测: 微信 / QQ / 其他 ----------
+    function checkEnvironment() {
+      const ua = navigator.userAgent || '';
+      // 微信
+      if (/MicroMessenger/i.test(ua)) {
+        return 'wechat';
+      }
+      // QQ (包含 QQ/ 或者 MQQBrowser)
+      if (/QQ\//i.test(ua) || /MQQBrowser/i.test(ua)) {
+        return 'qq';
+      }
+      return 'browser';
+    }
+
+    const env = checkEnvironment();
+    isWechatOrQQ = (env === 'wechat' || env === 'qq');
+
+    // ---------- 根据环境切换UI ----------
+    if (isWechatOrQQ) {
+      // 微信/QQ 内: 隐藏浏览器内容, 显示箭头提示
+      browserModeDiv.classList.add('hidden');
+      wechatModeDiv.style.display = 'flex';   // flex显示
+      // 不需要执行跳转逻辑
+    } else {
+      // 浏览器环境: 显示浏览器模式, 隐藏wechat模式
+      wechatModeDiv.style.display = 'none';
+      browserModeDiv.classList.remove('hidden');
+      
+      // 页面加载后立即尝试跳转 (一进入就跳)
+      attemptAutoLaunch();
+    }
+
+    // ---------- 核心: 唤起抖音 ----------
+    function launchDouyin(triggerType = 'auto') {
+      // 清除之前的计时器
+      if (launchTimer) {
+        clearTimeout(launchTimer);
+        launchTimer = null;
+      }
+
+      // 尝试多种方式唤起
+      let schemeUsed = DOUYIN_SCHEME;
+      
+      try {
+        // 方法1: 直接location跳转 (最常用)
+        window.location.href = schemeUsed;
+      } catch (e) {
+        // 忽略
+      }
+
+      // 同时使用 iframe 方式增加成功率 (尤其在安卓)
+      try {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = schemeUsed;
+        document.body.appendChild(iframe);
+        setTimeout(() => {
+          if (iframe && iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        }, 800);
+      } catch (e) {}
+
+      // 对于部分浏览器，尝试备选 scheme (延迟一点点，避免冲突)
+      setTimeout(() => {
+        try {
+          // 如果还没有blur, 再用备选试探一次 (只试探一次)
+          if (!hasBlurred) {
+            const testIframe = document.createElement('iframe');
+            testIframe.style.display = 'none';
+            testIframe.src = FALLBACK_SCHEME;
+            document.body.appendChild(testIframe);
+            setTimeout(() => {
+              if (testIframe && testIframe.parentNode) {
+                document.body.removeChild(testIframe);
+              }
+            }, 600);
+          }
+        } catch (e) {}
+      }, 200);
+
+      // 记录blur状态 (页面失焦通常意味着跳转成功)
+      const onBlur = () => {
+        hasBlurred = true;
+        if (launchTimer) {
+          clearTimeout(launchTimer);
+          launchTimer = null;
+        }
+        // 如果成功跳转, 可以隐藏失败UI (但用户离开页面, 无所谓)
+      };
+      window.addEventListener('blur', onBlur, { once: true });
+      
+      // 另外监听页面可见性变化 (作为辅助)
+      const onVisibilityChange = () => {
+        if (document.hidden) {
+          hasBlurred = true;
+          if (launchTimer) {
+            clearTimeout(launchTimer);
+            launchTimer = null;
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', onVisibilityChange, { once: true });
+
+      // 设置一个延时检测: 如果2.5秒内没有blur, 认为跳转失败
+      launchTimer = setTimeout(() => {
+        if (!hasBlurred) {
+          // 跳转失败 —— 显示失败提示 & 蓝色按钮
+          showFailState();
+        }
+        // 清理监听器 (避免内存)
+        window.removeEventListener('blur', onBlur);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        launchTimer = null;
+      }, 2500);
+    }
+
+    // 显示失败状态: 隐藏loading, 显示失败文案 + 蓝字按钮
+    function showFailState() {
+      loadingIndicator.classList.add('hidden');
+      failMessageBlock.classList.remove('hidden');
+      manualJumpBtn.classList.remove('hidden');
+      // 可以稍微改变提示
+      extraHint.innerText = '点击上方蓝字重新打开抖音';
+    }
+
+    // 重置为加载状态 (用于手动重试)
+    function resetToLoadingState() {
+      hasBlurred = false;
+      loadingIndicator.classList.remove('hidden');
+      failMessageBlock.classList.add('hidden');
+      manualJumpBtn.classList.add('hidden');
+      extraHint.innerText = '若未安装抖音，请前往应用商店下载';
+    }
+
+    // 自动尝试唤起 (进入页面立即)
+    function attemptAutoLaunch() {
+      resetToLoadingState();
+      launchDouyin('auto');
+    }
+
+    // ---------- 手动点击 "一键跳转" ----------
+    function handleManualJump(e) {
+      e.preventDefault();
+      // 重置界面为加载中
+      resetToLoadingState();
+      
+      // 清除之前的计时器
+      if (launchTimer) {
+        clearTimeout(launchTimer);
+        launchTimer = null;
+      }
+      // 重置 blur 标记
+      hasBlurred = false;
+      
+      // 再次尝试唤起
+      launchDouyin('manual');
+    }
+
+    // 绑定手动跳转按钮
+    if (manualJumpBtn) {
+      manualJumpBtn.addEventListener('click', handleManualJump);
+    }
+
+    // 额外的触摸优化: 如果用户点击卡片其他区域不干扰
+    // 如果用户通过浏览器返回等操作，不做特殊处理
+
+    // ---------- 在微信/QQ环境下的附加说明(已经显示) ----------
+    // 无需额外操作
+
+    // 但是，如果是微信/QQ环境，我们还想要 “祝弹出一个箭头，指的右上角” 已经用SVG实现。
+    // 还可以加一个小细节: 检测到是微信时, 自动聚焦提示
+
+    // 当在浏览器中，但跳转失败，用户除了点击蓝字，也可以再次尝试。
+    // 另外，有些浏览器可能需要用户手势才能唤起，手动点击按钮符合要求。
+
+    // 防止在浏览器内重复多次跳转导致页面闪动; 但已经通过计时器管理
+
+    // 如果用户从其他app跳转过来，但浏览器不支持scheme, 显示按钮.
+
+    // 预检: 部分浏览器在页面加载时自动跳转可能被某些策略阻止，但大多数可行。
+    // 为了更友好: 如果用户看到loading很久，也可以点蓝字
+
+    // 边界情况: 如果页面是在iframe内? 忽略.
+
+    // 再处理一下: 如果用户在失败后点击蓝字，再次尝试
+    // 并且如果多次失败，依然显示按钮
+
+    // 增加一个小优化: 如果2.5秒后没跳走，显示失败; 但若用户手动点击时，重新计时。
+    
+    // 另外，当页面可见性变化且document.hidden时，视为成功，就不展示失败UI了(但用户离开, 无所谓)
+    
+    // 为了更好体验: 如果跳转成功(触发blur或隐藏)，我们不清除UI，因为页面可能被挂起。
+    
+    // 如果是微信/QQ内，不执行任何跳转逻辑。
+    
+    // 附加：可以在浏览器控制台测试，一切正常。
+
+    // 但是，在部分浏览器中，location跳转后，blur可能不触发？但大多数会。
+    // 我们还有计时器兜底。
+    
+    // 而且手动点击蓝字时，重置状态并调用launch，且会再次绑定blur。
+    
+    // 处理一个潜在问题：在手动跳转时，可能之前的blur监听没有移除，我们使用 once: true 或者手动移除。
+    // launchDouyin 里每次都添加新的监听，旧的会被覆盖？我们用 once: true 所以每次执行添加新的一次性监听，没问题。
+    // 但为了避免多次添加，可以。我们每次调用launchDouyin都会添加新的监听。
+
+    // 额外：如果在浏览器中，用户通过系统返回回到页面，可能会看到失败界面，也合理。
+    
+    // 最后确保: 包名在页面显示, 满足展示需求.
+
+    // 如果环境是微信，但用户可能会长按识别? 但不管。 
+    // 为防止微信内误触跳转，我们不做任何唤起尝试。
+    
+    console.log('抖音唤起页 · 环境:', env, '| 包名:', PACKAGE_NAME);
+  })();
+</script>
+</body>
+</html>
