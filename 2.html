@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>📁 多视频 · 播放器切换 · 同目录</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #0b0f15 0%, #1a1f2a 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            padding: 20px;
+        }
+
+        /* 主容器 — 两列布局 (左侧播放器+右侧视频列表) */
+        .app-container {
+            max-width: 1440px;
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* 左侧播放器卡片 */
+        .player-card {
+            flex: 3;
+            min-width: 320px;
+            background: #0e1219;
+            border-radius: 28px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+            overflow: hidden;
+            border: 1px solid #2a3340;
+        }
+
+        /* 视频区域 */
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 70vh;
+            background: #000;
+            outline: none;
+        }
+
+        /* 内置控制栏 (网页播放器) */
+        .custom-controls {
+            background: #141a22;
+            padding: 14px 22px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px 16px;
+            border-top: 1px solid #27303d;
+            color: #e3e9f2;
+            transition: opacity 0.2s;
+        }
+
+        /* 当使用浏览器原生控件时隐藏自定义栏 */
+        .player-card.native-mode .custom-controls {
+            display: none;
+        }
+
+        .player-card.native-mode .video-wrapper video::-webkit-media-controls {
+            display: flex !important;
+        }
+
+        /* 默认隐藏原生控件 (因为我们用自定义) */
+        .video-wrapper video {
+            pointer-events: auto; 
+        }
+        /* 在非native模式下隐藏原生控件 */
+        .player-card:not(.native-mode) .video-wrapper video::-webkit-media-controls {
+            display: none !important;
+        }
+        /* 但保留右键菜单等 */
+        
+        .play-pause-btn {
+            background: #2d3b4b;
+            border: none;
+            border-radius: 40px;
+            color: white;
+            font-size: 22px;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border: 1px solid #4e627c;
+            flex-shrink: 0;
+        }
+
+        .play-pause-btn:hover {
+            background: #3e5168;
+            border-color: #7f9bc2;
+        }
+
+        .time-display {
+            font-variant-numeric: tabular-nums;
+            background: #1b232d;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 1rem;
+            border: 1px solid #354252;
+            color: #d6e3ff;
+            flex-shrink: 0;
+        }
+
+        .progress-container {
+            flex: 1 1 200px;
+            min-width: 180px;
+            display: flex;
+            align-items: center;
+        }
+
+        .progress-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 20px;
+            background: #262f3c;
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .progress-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #6a8bbf;
+            margin-top: -6px;
+        }
+
+        .progress-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #6a8bbf;
+        }
+
+        .progress-slider::-webkit-slider-runnable-track {
+            height: 6px;
+            background: linear-gradient(to right, #3f7bcb, #6ea5ff);
+            border-radius: 20px;
+        }
+
+        .volume-section {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #1b232d;
+            padding: 5px 12px;
+            border-radius: 40px;
+            border: 1px solid #354252;
+        }
+
+        .volume-icon {
+            font-size: 20px;
+            cursor: pointer;
+            color: #b7cbee;
+        }
+
+        .volume-slider {
+            width: 80px;
+            height: 5px;
+            background: #262f3c;
+            appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: white;
+            border: 1.5px solid #6e95cf;
+            margin-top: -4.5px;
+        }
+
+        .speed-select {
+            background: #1b232d;
+            color: #e3e9f2;
+            border: 1px solid #3f5168;
+            border-radius: 30px;
+            padding: 8px 14px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .fullscreen-btn, .download-btn {
+            background: #2d3b4b;
+            border: none;
+            border-radius: 40px;
+            color: white;
+            font-size: 22px;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 1px solid #4e627c;
+            flex-shrink: 0;
+        }
+
+        .fullscreen-btn:hover, .download-btn:hover {
+            background: #3e5168;
+        }
+
+        /* 右侧视频列表 + 设置区 */
+        .sidebar {
+            flex: 1.2;
+            min-width: 260px;
+            background: #0e1219;
+            border-radius: 28px;
+            padding: 22px 18px;
+            border: 1px solid #2a3340;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.5);
+            color: #eef3fc;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 18px;
+            font-weight: 500;
+            border-bottom: 1px solid #2a3747;
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 播放器切换单选 */
+        .player-toggle-group {
+            background: #141c26;
+            border-radius: 48px;
+            padding: 5px;
+            display: flex;
+            margin-bottom: 28px;
+            border: 1px solid #2f4053;
+        }
+
+        .toggle-option {
+            flex: 1;
+            text-align: center;
+            padding: 10px 0;
+            border-radius: 40px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #b0c6e0;
+        }
+
+        .toggle-option.active {
+            background: #2d4b6e;
+            color: white;
+            box-shadow: 0 2px 6px #00000055;
+        }
+
+        /* 视频列表 */
+        .video-list {
+            list-style: none;
+            margin-top: 10px;
+            max-height: 380px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .video-item {
+            background: #151f2b;
+            margin-bottom: 10px;
+            border-radius: 18px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            border: 1px solid #2d3e51;
+            transition: 0.15s;
+        }
+
+        .video-item:hover {
+            background: #1f2e40;
+            border-color: #4f749b;
+        }
+
+        .video-item.active-video {
+            background: #1f3a55;
+            border-color: #6c9bd9;
+            box-shadow: 0 0 0 1px #3f7bcb;
+        }
+
+        .video-item .thumb {
+            width: 48px;
+            height: 48px;
+            background: #0c141f;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            border: 1px solid #3f556b;
+            color: #aac2e5;
+            flex-shrink: 0;
+        }
+
+        .video-info {
+            overflow: hidden;
+        }
+
+        .video-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 180px;
+        }
+
+        .video-meta {
+            font-size: 0.8rem;
+            color: #9bb1cf;
+        }
+
+        .add-video-section {
+            margin-top: 20px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .add-input {
+            flex: 1;
+            background: #1a2532;
+            border: 1px solid #3c5068;
+            border-radius: 40px;
+            padding: 12px 16px;
+            color: white;
+            outline: none;
+        }
+
+        .add-btn {
+            background: #2d4b6e;
+            border: none;
+            border-radius: 40px;
+            padding: 0 20px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            border: 1px solid #5f85b1;
+        }
+
+        .file-hint {
+            font-size: 0.85rem;
+            color: #90a4c2;
+            margin-top: 8px;
+        }
+
+        .error-tip {
+            color: #f9a88b;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 800px) {
+            .app-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- 左侧播放器区域 -->
+    <div class="player-card" id="playerCard">
+        <div class="video-wrapper">
+            <video id="mainVideo" preload="metadata" controlsList="nodownload">
+                <!-- 动态切换source，初始用默认 -->
+                <source src="./video.mp4" type="video/mp4">
+                您的浏览器不支持 video 标签。
+            </video>
+        </div>
+
+        <!-- 自定义控制栏 (网页内置播放器) -->
+        <div class="custom-controls" id="customControls">
+            <button class="play-pause-btn" id="playPauseBtn">▶</button>
+            <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
+            <div class="progress-container">
+                <input type="range" id="progressBar" class="progress-slider" value="0" step="0.01" min="0" max="100">
+            </div>
+            <div class="volume-section">
+                <span class="volume-icon" id="volumeIcon">🔊</span>
+                <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="1">
+            </div>
+            <select class="speed-select" id="speedSelect">
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+            </select>
+            <button class="download-btn" id="downloadBtn" title="下载当前视频">⬇️</button>
+            <button class="fullscreen-btn" id="fullscreenBtn">⛶</button>
+        </div>
+        <div id="videoErrorMsg" style="display:none; padding:16px; color:#e0a890; background:#151f2a;">
+            ⚠️ 视频加载失败，请检查文件是否存在。
+        </div>
+    </div>
+
+    <!-- 右侧面板：切换播放器 + 视频列表 + 下载管理 -->
+    <div class="sidebar">
+        <h3>🎬 播放器设置</h3>
+        <div class="player-toggle-group" id="playerToggle">
+            <div class="toggle-option active" data-mode="custom">🎮 网页播放器</div>
+            <div class="toggle-option" data-mode="native">🌐 浏览器原生</div>
+        </div>
+        <p style="font-size:0.85rem; margin-top:-10px; margin-bottom:20px; opacity:0.8;">
+            ⏵ 网页播放器：自定义控件，可调进度。<br>
+            ⏵ 原生：使用浏览器内置控件。
+        </p>
+
+        <h3>📂 同目录视频 <span style="font-size:0.8rem; margin-left:8px;">(点击切换)</span></h3>
+        <ul class="video-list" id="videoListContainer">
+            <!-- 动态生成列表 -->
+        </ul>
+        
+        <div class="add-video-section">
+            <input type="text" class="add-input" id="newVideoNameInput" placeholder="视频文件名 (如 video2.mp4)" value="video2.mp4">
+            <button class="add-btn" id="addVideoBtn">➕ 添加</button>
+        </div>
+        <div class="file-hint">
+            💡 视频文件需与HTML同目录。支持.mp4, .webm, .ogv。
+        </div>
+        <div id="listErrorMsg" class="error-tip"></div>
+        
+        <!-- 下载辅助说明：点击下载按钮即可保存当前视频 -->
+        <div style="margin-top: 20px; border-top: 1px solid #253341; padding-top: 16px;">
+            <p style="display: flex; gap: 8px; align-items: center;">
+                <span>⬇️ 下载按钮：保存当前视频到本地</span>
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        "use strict";
+
+        // ---------- 核心元素 ----------
+        const video = document.getElementById('mainVideo');
+        const playerCard = document.getElementById('playerCard');
+        const customControls = document.getElementById('customControls');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const progressBar = document.getElementById('progressBar');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeIcon = document.getElementById('volumeIcon');
+        const speedSelect = document.getElementById('speedSelect');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const errorMsgDiv = document.getElementById('videoErrorMsg');
+        
+        // 播放器模式切换
+        const toggleOptions = document.querySelectorAll('.toggle-option');
+        let currentMode = 'custom'; // 'custom' 或 'native'
+
+        // 视频列表数据
+        let videoFiles = [
+            { name: 'video.mp4', type: 'video/mp4' },
+            { name: 'video.webm', type: 'video/webm' },  // 备选
+        ];
+        let currentVideoIndex = 0;  // 默认第一个
+
+        const videoListEl = document.getElementById('videoListContainer');
+        const newVideoInput = document.getElementById('newVideoNameInput');
+        const addBtn = document.getElementById('addVideoBtn');
+        const listErrorMsg = document.getElementById('listErrorMsg');
+
+        // ---------- 辅助函数 ----------
+        function formatTime(sec) {
+            if (isNaN(sec) || sec < 0) return '0:00';
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            const s = Math.floor(sec % 60);
+            if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            return `${m}:${s.toString().padStart(2,'0')}`;
+        }
+
+        // 更新内置播放器UI
+        function updateCustomUI() {
+            if (!video.duration) return;
+            const cur = video.currentTime;
+            const dur = video.duration;
+            timeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)}`;
+            const percent = (cur / dur) * 100;
+            progressBar.value = percent;
+            progressBar.style.background = `linear-gradient(to right, #3f7bcb 0%, #6ea5ff ${percent}%, #262f3c ${percent}%, #262f3c 100%)`;
+            
+            if (video.paused) playPauseBtn.innerHTML = '▶';
+            else playPauseBtn.innerHTML = '⏸';
+        }
+
+        function updateVolumeUI() {
+            const vol = video.volume;
+            volumeSlider.value = vol;
+            if (video.muted || vol === 0) volumeIcon.textContent = '🔇';
+            else if (vol < 0.5) volumeIcon.textContent = '🔉';
+            else volumeIcon.textContent = '🔊';
+        }
+
+        // 切换视频源 (核心)
+        function switchToVideo(index) {
+            if (index >= videoFiles.length) index = 0;
+            const file = videoFiles[index];
+            if (!file) return;
+            
+            // 更新video的src (通过source)
+            const ext = file.name.split('.').pop().toLowerCase();
+            let mime = 'video/mp4';
+            if (ext === 'webm') mime = 'video/webm';
+            else if (ext === 'ogv' || ext === 'ogg') mime = 'video/ogg';
+            
+            // 清空原有source，重新设置
+            video.innerHTML = ''; 
+            const source = document.createElement('source');
+            source.src = './' + file.name;
+            source.type = mime;
+            video.appendChild(source);
+            
+            // 添加一个备选提示
+            video.load();
+            currentVideoIndex = index;
+            
+            // 更新列表激活样式
+            renderVideoList();
+            
+            // 重置错误显示
+            errorMsgDiv.style.display = 'none';
+            
+            // 播放 (尝试)
+            video.play().catch(()=>{});
+            updateCustomUI();
+            
+            // 如果原生模式，显示原生控件，但我们的控制栏隐藏。
+        }
+
+        // 渲染视频列表
+        function renderVideoList() {
+            if (!videoListEl) return;
+            videoListEl.innerHTML = '';
+            videoFiles.forEach((file, idx) => {
+                const li = document.createElement('li');
+                li.className = 'video-item' + (idx === currentVideoIndex ? ' active-video' : '');
+                li.innerHTML = `
+                    <div class="thumb">🎞️</div>
+                    <div class="video-info">
+                        <div class="video-name">${file.name}</div>
+                        <div class="video-meta">${file.type || 'video'}</div>
+                    </div>
+                `;
+                li.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    switchToVideo(idx);
+                });
+                videoListEl.appendChild(li);
+            });
+        }
+
+        // 播放器模式切换
+        function setPlayerMode(mode) {
+            currentMode = mode;
+            if (mode === 'native') {
+                playerCard.classList.add('native-mode');
+                video.controls = true;   // 显示浏览器原生控件
+                // 但是隐藏自定义控件
+                customControls.style.display = 'none';
+            } else {
+                playerCard.classList.remove('native-mode');
+                video.controls = false;   // 隐藏原生控件
+                customControls.style.display = 'flex';
+            }
+            // 更新toggle激活样式
+            toggleOptions.forEach(opt => {
+                if (opt.dataset.mode === mode) opt.classList.add('active');
+                else opt.classList.remove('active');
+            });
+        }
+
+        // 进度条拖动 (修复无法调进度: 绑定input/change)
+        function onProgressInput(e) {
+            if (video.duration) {
+                const percent = parseFloat(e.target.value);
+                video.currentTime = (percent / 100) * video.duration;
+                updateCustomUI();
+            }
+        }
+
+        // 下载当前视频
+        function downloadCurrentVideo() {
+            const file = videoFiles[currentVideoIndex];
+            if (!file) return;
+            const a = document.createElement('a');
+            a.href = './' + file.name;
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        // 添加新视频 (同目录)
+        function addVideoFromInput() {
+            let rawName = newVideoInput.value.trim();
+            if (!rawName) {
+                listErrorMsg.textContent = '请输入文件名';
+                return;
+            }
+            // 简单校验扩展名
+            if (!/\.(mp4|webm|ogv|ogg|mov|mkv)$/i.test(rawName)) {
+                listErrorMsg.textContent = '建议使用 .mp4, .webm, .ogv 等格式';
+            } else {
+                listErrorMsg.textContent = '';
+            }
+            // 避免重复
+            if (!videoFiles.some(f => f.name === rawName)) {
+                let mime = 'video/mp4';
+                if (rawName.endsWith('.webm')) mime = 'video/webm';
+                else if (rawName.endsWith('.ogv')||rawName.endsWith('.ogg')) mime = 'video/ogg';
+                videoFiles.push({ name: rawName, type: mime });
+                renderVideoList();
+                newVideoInput.value = '';
+            } else {
+                listErrorMsg.textContent = '该视频已在列表中';
+            }
+        }
+
+        // ---------- 事件绑定 ----------
+        function bindEvents() {
+            // 视频元数据
+            video.addEventListener('loadedmetadata', () => {
+                updateCustomUI();
+                errorMsgDiv.style.display = 'none';
+            });
+            video.addEventListener('timeupdate', updateCustomUI);
+            video.addEventListener('play', ()=> playPauseBtn.innerHTML = '⏸');
+            video.addEventListener('pause', ()=> playPauseBtn.innerHTML = '▶');
+            video.addEventListener('volumechange', updateVolumeUI);
+            video.addEventListener('error', () => {
+                errorMsgDiv.style.display = 'block';
+            });
+            video.addEventListener('canplay', ()=> errorMsgDiv.style.display = 'none');
+
+            // 播放/暂停
+            playPauseBtn.addEventListener('click', ()=>{
+                if (video.paused) video.play().catch(e=>{});
+                else video.pause();
+            });
+
+            // 进度条: 修复无法调进度
+            progressBar.addEventListener('input', onProgressInput);
+            progressBar.addEventListener('change', onProgressInput);
+
+            // 音量
+            volumeSlider.addEventListener('input', (e)=>{
+                video.volume = parseFloat(e.target.value);
+                video.muted = (video.volume === 0);
+                updateVolumeUI();
+            });
+            volumeIcon.addEventListener('click', ()=>{
+                if (video.volume > 0) {
+                    video.muted = !video.muted;
+                } else {
+                    video.volume = 0.5;
+                    video.muted = false;
+                }
+                updateVolumeUI();
+            });
+
+            // 倍速
+            speedSelect.addEventListener('change', (e)=> video.playbackRate = parseFloat(e.target.value));
+
+            // 全屏
+            fullscreenBtn.addEventListener('click', ()=>{
+                if (!document.fullscreenElement) {
+                    playerCard.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+            document.addEventListener('fullscreenchange', ()=>{
+                fullscreenBtn.innerHTML = document.fullscreenElement ? '✕' : '⛶';
+            });
+
+            // 下载
+            downloadBtn.addEventListener('click', downloadCurrentVideo);
+
+            // 播放器模式切换
+            toggleOptions.forEach(opt => {
+                opt.addEventListener('click', ()=>{
+                    const mode = opt.dataset.mode;
+                    setPlayerMode(mode);
+                });
+            });
+
+            // 添加视频
+            addBtn.addEventListener('click', addVideoFromInput);
+            newVideoInput.addEventListener('keypress', (e)=> { if(e.key==='Enter') addVideoFromInput(); });
+
+            // 视频点击也可播放/暂停 (在自定义模式下)
+            video.addEventListener('click', ()=>{
+                if (currentMode === 'custom') {
+                    if (video.paused) video.play(); else video.pause();
+                }
+            });
+        }
+
+        // 初始化
+        function init() {
+            // 默认视频列表可能包含默认文件，也可以把同目录常见文件加入
+            // 保留初始两个
+            renderVideoList();
+            setPlayerMode('custom');
+            video.volume = 1.0;
+            volumeSlider.value = 1.0;
+            updateVolumeUI();
+            // 如果有默认视频
+            if (videoFiles.length>0) switchToVideo(0);
+            
+            bindEvents();
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>

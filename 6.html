@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>🔄 自动刷新 · 实时北京时间</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(145deg, #0b0e14 0%, #1a1f2a 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            padding: 1.5rem;
+        }
+
+        .clock-card {
+            background: rgba(18, 25, 35, 0.85);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border: 1px solid rgba(78, 159, 255, 0.25);
+            border-radius: 3.5rem;
+            padding: 2.8rem 3.5rem;
+            box-shadow: 
+                0 25px 40px -10px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(0, 255, 255, 0.05) inset,
+                0 8px 20px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            max-width: 850px;
+            width: fit-content;
+            margin: 0 auto;
+        }
+
+        .city-badge {
+            background: rgba(0, 150, 255, 0.2);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            padding: 0.45rem 1.6rem;
+            border-radius: 60px;
+            border: 1px solid rgba(80, 180, 255, 0.4);
+            font-weight: 600;
+            font-size: 1.3rem;
+            letter-spacing: 3px;
+            color: #b3dcff;
+            text-transform: uppercase;
+            margin-bottom: 0.8rem;
+            display: inline-block;
+        }
+
+        .refresh-tip {
+            color: #7fb4e6;
+            font-size: 0.95rem;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.2);
+            padding: 6px 18px;
+            border-radius: 40px;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+            border: 1px solid #2e4e72;
+        }
+
+        .refresh-icon {
+            display: inline-block;
+            animation: spinHint 3s infinite linear;
+            font-size: 1.1rem;
+        }
+
+        @keyframes spinHint {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(20deg); }
+            50% { transform: rotate(0deg); }
+            75% { transform: rotate(-20deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        .time-display {
+            font-size: clamp(3.5rem, 16vw, 6.8rem);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.2;
+            color: #f5fcff;
+            text-shadow: 
+                0 0 25px #00aaff66,
+                0 4px 12px rgba(0, 0, 0, 0.6),
+                0 0 2px #ffffffc0;
+            letter-spacing: 8px;
+            margin: 0.35rem 0 0.5rem 0;
+        }
+
+        .seconds-highlight {
+            color: #a0f5ff;
+            text-shadow: 0 0 20px #00e0ff, 0 0 40px #0099ff;
+            font-weight: 800;
+        }
+
+        .date-section {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px dashed #3a5a7a;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            justify-content: center;
+            gap: 0.5rem 1.8rem;
+        }
+
+        .full-date {
+            font-size: 1.6rem;
+            font-weight: 450;
+            color: #d3e6ff;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 5px #00000060;
+        }
+
+        .weekday {
+            font-size: 1.7rem;
+            font-weight: 500;
+            color: #ffecbb;
+            background: rgba(255, 215, 120, 0.08);
+            padding: 0.2rem 1.2rem;
+            border-radius: 40px;
+            backdrop-filter: blur(4px);
+            border: 1px solid #dbb87c33;
+        }
+
+        .footer-note {
+            margin-top: 2rem;
+            color: #8da9cc;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            opacity: 0.8;
+        }
+
+        .blink-dot {
+            width: 8px;
+            height: 8px;
+            background: #3eff9e;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #00ffaa;
+            animation: pulseGreen 1.4s infinite;
+        }
+
+        @keyframes pulseGreen {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.9); }
+        }
+
+        button {
+            background: transparent;
+            border: none;
+            color: inherit;
+        }
+    </style>
+</head>
+<body>
+
+<div class="clock-card">
+    <div class="city-badge">🇨🇳 北京 · BEIJING</div>
+    
+    <!-- 刷新提示条，显示下次刷新的倒计时（动态计算） -->
+    <div class="refresh-tip" id="refreshCountdownTip">
+        <span class="refresh-icon">⟳</span>
+        <span id="countdownText">1 秒后刷新</span>
+        <span class="blink-dot"></span>
+    </div>
+
+    <!-- 主时间 -->
+    <div class="time-display" id="liveTime">--:--:--</div>
+
+    <!-- 日期和星期 -->
+    <div class="date-section">
+        <span class="full-date" id="datePart">----年--月--日</span>
+        <span class="weekday" id="weekdayPart">星期-</span>
+    </div>
+
+    <div class="footer-note">
+        <span>⚡ 每秒自动刷新页面 · 绝对精准</span>
+        <span style="opacity:0.6;">| UTC+8</span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        "use strict";
+
+        // ---------- 格式化工具 ----------
+        function formatTwoDigits(num) {
+            return num.toString().padStart(2, '0');
+        }
+
+        // 获取当前北京时间 (UTC+8)
+        function getBeijingTime() {
+            const now = new Date();
+            // 获取 UTC 时间戳，然后加上 8 小时偏移
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            return new Date(utc + (8 * 3600000));
+        }
+
+        // 更新显示 (保证显示正确，即使刷新间隙也视觉平滑)
+        function updateDisplay() {
+            const bj = getBeijingTime();
+            
+            const year = bj.getFullYear();
+            const month = formatTwoDigits(bj.getMonth() + 1);
+            const day = formatTwoDigits(bj.getDate());
+            const hours = formatTwoDigits(bj.getHours());
+            const minutes = formatTwoDigits(bj.getMinutes());
+            const seconds = formatTwoDigits(bj.getSeconds());
+            
+            const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            const weekdayStr = weekdays[bj.getDay()];
+
+            // 更新时间显示 —— 秒单独高亮
+            const timeElement = document.getElementById('liveTime');
+            if (timeElement) {
+                timeElement.innerHTML = `${hours}:${minutes}:<span class="seconds-highlight">${seconds}</span>`;
+            }
+
+            const dateElement = document.getElementById('datePart');
+            if (dateElement) {
+                dateElement.textContent = `${year}年${month}月${day}日`;
+            }
+
+            const weekdayElement = document.getElementById('weekdayPart');
+            if (weekdayElement) {
+                weekdayElement.textContent = weekdayStr;
+            }
+        }
+
+        // 刷新倒计时提示 (显示距离下一次刷新的秒数)
+        function updateCountdownText(secondsLeft) {
+            const el = document.getElementById('countdownText');
+            if (el) {
+                if (secondsLeft <= 0) {
+                    el.textContent = '刷新中...';
+                } else {
+                    el.textContent = `${secondsLeft} 秒后刷新`;
+                }
+            }
+        }
+
+        // ---------- 核心: 每秒自动刷新页面 (重新加载URL) ----------
+        // 为了避免闪烁/白屏，我们依然立即更新一次显示，
+        // 然后设定定时器去执行 location.reload()
+        
+        const REFRESH_INTERVAL_MS = 100; // 1秒
+        
+        // 用于倒计时显示的辅助变量
+        let countdown = 1; 
+        
+        // 先立即显示正确时间
+        updateDisplay();
+        
+        // 设置倒计时文本初始值
+        updateCountdownText(1);
+        
+        // 每秒递减倒计时显示 (但真正的刷新由另一个计时器负责)
+        const countdownInterval = setInterval(() => {
+            countdown -= 1;
+            if (countdown < 0) {
+                countdown = 1;  // 重新计数 (但实际上刷新后会重置)
+            }
+            updateCountdownText(countdown);
+        }, 1000);
+        
+        // 主刷新定时器：每秒重新加载页面（强制从服务器/缓存重新加载，保证时间重新获取）
+        // 注意：使用 setTimeout 递归可避免累积误差，但此处直接 setInterval 已足够
+        const refreshInterval = setInterval(() => {
+            // 刷新前将倒计时置0提示 (但由于刷新很快，用户可能看不到)
+            updateCountdownText(0);
+            // 执行刷新 —— 重新加载当前页面
+            location.reload();
+        }, REFRESH_INTERVAL_MS);
+        
+        // 但有一个细节：刷新后 countdown 从1开始，但是刷新过程中 countdownInterval 会重新初始化。
+        // 另外为了防止刷新前最后一次倒计时显示错误，我们在刷新前设置文本。
+        
+        // 可选：如果页面因为某些原因被挂起，清理定时器不是必须的，但保持良好习惯
+        window.addEventListener('beforeunload', () => {
+            // 清理定时器，虽然不是必须，但更干净
+            clearInterval(countdownInterval);
+            clearInterval(refreshInterval);
+        });
+        
+        // 为了让刷新间隙的显示更加连贯，我们也可以额外用 requestAnimationFrame 但没必要，
+        // 因为1秒刷新一次，肉眼可见页面重新加载。但为了体验，可以加一个极短的延迟保证显示。
+        
+        // 修正：如果在移动端或某些浏览器，location.reload() 可能略微延迟，
+        // 这没关系。我们还可以保证刷新前时间显示是正确的。
+        
+        // 另外，为了避免闪烁，我们在刷新之前瞬间再更新一次显示(可选)
+        // 但 reload 已经很快。
+        
+        // 额外：因为页面每秒钟重新加载，所以不需要担心时间偏差。
+        // 但为了在刚刷新完时立即显示正确时间，updateDisplay() 在脚本加载时就会执行。
+        
+        // 小优化：如果用户停留在页面，看到倒计时归零，但刷新还没完成？极少见。
+        // 万一刷新被阻止（比如开发工具断点），为了防止倒计时混乱，我们增加一个后备。
+        // 如果刷新因为某种原因未发生，手动重置倒计时显示? 不需要，因为刷新总会发生。
+        
+        // 为了让“刷新中”的提示更准确，我们可以在刷新前将 countdownText 写为 “刷新...”
+        // 已经在 setInterval 回调中做了。
+        
+        // 边缘情况：如果用户离开标签页，计时器可能被节流，但刷新依然会尽量按时发生。
+        // 完美符合“一直重复刷新网址”的需求。
+        
+        // 额外优化：为了防止刷新瞬间出现未定义，我们也可以将样式提前渲染。
+        // 全部完成。
+    })();
+</script>
+
+<!-- 保证如果脚本加载失败或禁用，至少有静态提示，但上面的脚本会处理一切 -->
+<noscript>
+    <div style="color:white; text-align:center;">需要JavaScript支持实时刷新与时间显示</div>
+</noscript>
+
+</body>
+</html>

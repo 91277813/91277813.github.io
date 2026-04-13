@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>精简下载 · 1-10.zip</title>
+    <style>
+        /* 极简重置 + 干净布局 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #f5f7fa;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            max-width: 500px;
+            width: 100%;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.05);
+            padding: 28px 24px 32px;
+            border: 1px solid #e9eef2;
+        }
+        h2 {
+            font-weight: 500;
+            font-size: 1.8rem;
+            letter-spacing: -0.02em;
+            color: #1e2b3a;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #eef2f6;
+        }
+        .sub {
+            color: #5e6f7e;
+            margin-bottom: 28px;
+            font-size: 0.95rem;
+        }
+        .download-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .download-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fafcfd;
+            padding: 8px 12px 8px 20px;
+            border-radius: 60px;
+            border: 1px solid #dee5ea;
+            transition: all 0.1s ease;
+        }
+        .download-item:hover {
+            background: #ffffff;
+            border-color: #b6c8d6;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+        .file-name {
+            font-weight: 500;
+            color: #1f3a4e;
+            font-size: 1.1rem;
+            letter-spacing: -0.01em;
+        }
+        .file-name i {
+            font-style: normal;
+            margin-right: 6px;
+            opacity: 0.7;
+        }
+        .btn {
+            background: white;
+            border: 1.5px solid #2c7da0;
+            color: #2c7da0;
+            padding: 10px 22px;
+            border-radius: 40px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: 0.15s;
+            text-decoration: none;
+            display: inline-block;
+            line-height: 1;
+            background: #f9fbfc;
+        }
+        .btn:hover {
+            background: #2c7da0;
+            color: white;
+            border-color: #2c7da0;
+            box-shadow: 0 6px 12px rgba(44,125,160,0.12);
+            transform: scale(1.01);
+        }
+        .btn:active {
+            transform: scale(0.98);
+            background: #1f5e7a;
+            border-color: #1f5e7a;
+        }
+        /* 极简脚注 */
+        .footnote {
+            margin-top: 24px;
+            text-align: right;
+            font-size: 0.75rem;
+            color: #8a9aa8;
+            border-top: 1px dashed #d4dfe7;
+            padding-top: 18px;
+        }
+        .footnote span {
+            background: #eef3f7;
+            padding: 4px 10px;
+            border-radius: 30px;
+        }
+        /* 移动端依然舒适 */
+        @media (max-width: 440px) {
+            body { padding: 12px; }
+            .card { padding: 20px 16px; }
+            .download-item { padding: 6px 8px 6px 16px; }
+            .btn { padding: 8px 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>📦 下载中心</h2>
+    <div class="sub">1.zip — 10.zip · 点击按钮即下载</div>
+
+    <!-- 下载列表容器：由 JavaScript 动态生成，保证最精简、无冗余 -->
+    <div class="download-list" id="downloadList"></div>
+
+    <div class="footnote">
+        <span>同一目录 · 直接下载</span>
+    </div>
+</div>
+
+<script>
+    (function() {
+        "use strict";
+
+        // ---------- 最精简配置 ----------
+        const START = 1;
+        const END = 10;            // 1.zip 到 10.zip
+        const FILE_PREFIX = '';    // 文件名直接就是 1.zip, 2.zip ...
+        const FILE_SUFFIX = '.zip';
+        
+        // 获取列表容器
+        const listContainer = document.getElementById('downloadList');
+        if (!listContainer) return;
+
+        // 清空（保证干净）
+        listContainer.innerHTML = '';
+
+        // 用于存储生成的片段，一次性插入 (性能最优)
+        const fragment = document.createDocumentFragment();
+
+        // 循环构建 1~10 的下载条目
+        for (let i = START; i <= END; i++) {
+            // 文件名: "1.zip", "2.zip" ...
+            const fileName = `${i}${FILE_SUFFIX}`;
+            
+            // 创建条目外层 div
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'download-item';
+
+            // ----- 文件名区域（包含名称）-----
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'file-name';
+            // 添加小图标装饰（纯文本，保持精简）
+            nameSpan.innerHTML = `<i>📄</i> ${fileName}`;
+            
+            // ----- 下载按钮（链接行为）-----
+            const downloadBtn = document.createElement('a');
+            downloadBtn.className = 'btn';
+            downloadBtn.textContent = '下载';
+            
+            // 设置 href 为文件名 (相对路径，同一目录)
+            downloadBtn.href = fileName;
+            
+            // 关键: 添加 download 属性，强制浏览器下载而不是预览
+            // 这样 zip 文件会被下载，名字保持为 fileName
+            downloadBtn.setAttribute('download', fileName);
+            
+            // 可选的 aria 标签增强可访问性
+            downloadBtn.setAttribute('aria-label', `下载 ${fileName}`);
+            
+            // 安全处理：防止拖拽默认行为干扰 (非必须，但干净)
+            downloadBtn.addEventListener('dragstart', (e) => e.preventDefault());
+            
+            // 将元素组装
+            itemDiv.appendChild(nameSpan);
+            itemDiv.appendChild(downloadBtn);
+            
+            fragment.appendChild(itemDiv);
+        }
+
+        // 一次性渲染全部条目
+        listContainer.appendChild(fragment);
+
+        // 附加极简说明: 如果文件不存在，点击后会由浏览器处理404，符合常规预期。
+        // 一切从简 —— 没有多余请求或动态检测，完全依赖原生下载行为。
+        // 符合 “同一目录下会有1.zip到10.zip个文件，内容是一堆下载按键，按键前面包括名字”
+        // 这正是最精简实现。
+        
+        // 可选：在控制台输出友好提示 (但无干扰)
+        console.log('✅ 精简下载页已加载 · 文件: 1.zip ~ 10.zip');
+    })();
+</script>
+
+<!-- 
+    设计说明 —— 最精简，但依然友好：
+    - 完全符合需求：1.zip ~ 10.zip 的下载按钮，每个按钮前都有文件名。
+    - 没有多余的库、框架、图标字体，纯原生 HTML/CSS/JS。
+    - 使用 download 属性确保直接下载，即使浏览器能预览 zip 也会提示下载。
+    - 界面干净，卡片式布局，自适应移动/桌面。
+    - 同一目录：将本 HTML 放在与 1.zip ... 10.zip 相同的文件夹下即可工作。
+    - 如果某些文件暂缺，点击会触发 404，符合静态站点行为。
+    - 无需后端，零依赖。
+-->
+</body>
+</html>
