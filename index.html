@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>导航 · 十页</title>
+    <style>
+        /* 极简重置 + 干净布局 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #f5f7fa;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            margin: 0;
+        }
+
+        /* 卡片式容器 — 足够精简，但依然有呼吸感 */
+        .nav-panel {
+            max-width: 720px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 28px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.02), 0 2px 6px rgba(0, 0, 0, 0.03);
+            padding: 32px 24px 36px;
+            transition: all 0.1s ease;
+            border: 1px solid rgba(0, 0, 0, 0.02);
+        }
+
+        /* 极简标题 —— 只保留最必要的语义 */
+        h1 {
+            font-weight: 500;
+            font-size: 1.9rem;
+            letter-spacing: -0.01em;
+            color: #1e1e2a;
+            margin-bottom: 28px;
+            text-align: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e9ebf0;
+        }
+
+        /* 网格：十宫格，每行正好显示满，移动端自动适配 */
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+        }
+
+        /* 按钮样式 — 朴素、清晰、无多余装饰 */
+        .page-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fc;
+            border: 1px solid #e2e6ec;
+            color: #1f2a3e;
+            text-decoration: none;
+            font-weight: 450;
+            font-size: 1.25rem;
+            padding: 18px 6px;
+            border-radius: 18px;
+            transition: background 0.15s, border-color 0.15s, box-shadow 0.1s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+            backdrop-filter: blur(2px);
+            line-height: 1;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 按钮内的文字 “1” … “10” 足够直接 */
+        .page-btn:hover {
+            background: #ffffff;
+            border-color: #b0b9cc;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+        }
+
+        /* 轻按反馈 (移动端) */
+        .page-btn:active {
+            background: #eef1f7;
+            border-color: #9aa6b9;
+            transform: scale(0.98);
+        }
+
+        /* 极简脚注 — 仅用于说明，不影响主体按钮 */
+        .footnote {
+            margin-top: 32px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #7c879c;
+            letter-spacing: 0.2px;
+            border-top: 1px solid #edf0f5;
+            padding-top: 20px;
+        }
+
+        .footnote span {
+            opacity: 0.7;
+        }
+
+        /* 保证极窄屏 (≤360px) 仍然可点且不换行异常 */
+        @media (max-width: 480px) {
+            .nav-panel {
+                padding: 24px 16px 28px;
+                border-radius: 24px;
+            }
+            h1 {
+                font-size: 1.7rem;
+                margin-bottom: 24px;
+            }
+            .button-grid {
+                gap: 10px;
+            }
+            .page-btn {
+                font-size: 1.15rem;
+                padding: 16px 4px;
+                border-radius: 16px;
+            }
+        }
+
+        /* 特小屏仍保持5列，字号微调 */
+        @media (max-width: 360px) {
+            .page-btn {
+                font-size: 1rem;
+                padding: 14px 2px;
+            }
+        }
+
+        /* 焦点可见 (键盘导航) 但保持极简 */
+        .page-btn:focus-visible {
+            outline: 2px solid #6d8cff;
+            outline-offset: 2px;
+        }
+
+        /* 让“首页”文字不那么显眼，专注在按钮上 */
+        .subtle-hint {
+            font-weight: 380;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-panel">
+        <!-- 标题简洁：直接表明这是十个入口 -->
+        <h1>⚡ 1 → 10</h1>
+
+        <!-- 十个按钮，严格对应 1.html 到 10.html，在同一目录 -->
+        <div class="button-grid">
+            <a href="1.html" class="page-btn">三角洲行动</a>
+            <a href="2.html" class="page-btn">视频播放器</a>
+            <a href="3.html" class="page-btn">抖音</a>
+            <a href="4.html" class="page-btn">三角洲微信</a>
+            <a href="5.html" class="page-btn">下载中心</a>
+            <a href="6.html" class="page-btn">6</a>
+            <a href="7.html" class="page-btn">7</a>
+            <a href="8.html" class="page-btn">8</a>
+            <a href="9.html" class="page-btn">9</a>
+            <a href="10.html" class="page-btn">10</a>
+        </div>
+
+        <!-- 极简辅助信息 —— 完全符合“同一目录下会有1.html到10.html”的说明，
+             但不干扰按钮，可视为低调提示 -->
+        <div class="footnote">
+            <span>1.html … 10.html · 同目录</span>
+        </div>
+    </div>
+
+    <!-- 没有任何多余的脚本，纯粹导航。所有跳转均通过原生超链接。 
+         无需JS，保证最快、最精简。 -->
+</body>
+</html>
