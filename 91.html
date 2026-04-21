@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>双倍快乐 · 5090D 双核压力测试</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0a0a0a;
+            color: white;
+            font-family: 'Segoe UI', monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: row;
+        }
+        .container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+        }
+        .panel {
+            flex: 1;
+            position: relative;
+            border-right: 1px solid #333;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .panel:last-child {
+            border-right: none;
+        }
+        .panel-header {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 20;
+            background: rgba(20,20,30,0.7);
+            padding: 6px 15px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            border-left: 4px solid #ffaa00;
+            pointer-events: none;
+        }
+        .panel.right .panel-header {
+            border-left-color: #ff4444;
+        }
+        #left-canvas, #right-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+        /* 左边毒蘑菇专用的配置按钮 */
+        #left-config-btn {
+            position: absolute;
+            left: 10px;
+            top: 50px;
+            z-index: 30;
+            background: #333;
+            color: white;
+            border: 1px solid #666;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        #left-config-panel {
+            position: absolute;
+            left: 10px;
+            top: 90px;
+            z-index: 30;
+            background: rgba(30,30,40,0.95);
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            border: 1px solid #555;
+            backdrop-filter: blur(8px);
+        }
+        #left-config-panel textarea {
+            background: #1e1e2a;
+            color: #eee;
+            border: 1px solid #444;
+            width: 260px;
+            height: 180px;
+            font-family: monospace;
+            font-size: 11px;
+            resize: vertical;
+        }
+        .config-buttons {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+        .config-buttons button {
+            flex: 1;
+            background: #3a3a5a;
+            color: white;
+            border: none;
+            padding: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        /* 右侧FPS显示器 */
+        #right-fps {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            z-index: 20;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 20px;
+            color: #0f0;
+            font-family: monospace;
+            backdrop-filter: blur(4px);
+        }
+        /* 移动端适配：如果屏幕太窄就上下堆叠，这里保持桌面并排 */
+        @media (max-width: 700px) {
+            .container {
+                flex-direction: column;
+            }
+            .panel {
+                border-right: none;
+                border-bottom: 1px solid #333;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- 左侧区域：毒蘑菇体积着色器测试 (原8.html核心) -->
+    <div class="panel left">
+        <div class="panel-header">🍄 毒蘑菇 · 体积光追 (Mandelbulb风格)</div>
+        <button id="left-config-btn">⚙️ CONFIG</button>
+        <div id="left-config-panel">
+            <textarea id="left-kernel-code" spellcheck="false"></textarea>
+            <div class="config-buttons">
+                <button id="left-apply">APPLY</button>
+                <button id="left-cancel">CANCEL</button>
+            </div>
+        </div>
+        <canvas id="left-canvas" width="1024" height="1024"></canvas>
+    </div>
+
+    <!-- 右侧区域：5090D 暴力片段压力测试 -->
+    <div class="panel right">
+        <div class="panel-header">💥 5090D 刑具 · 暴力片段着色器 (4K高倍采样)</div>
+        <div id="right-fps">FPS: --</div>
+        <canvas id="right-canvas"></canvas>
+    </div>
+</div>
+
+<!-- 使用 type="module" 隔离作用域，但内部仍要小心全局监听 -->
+<script type="module">
+    // ==================== 左侧逻辑 (基于8.html，做了微调使其独立) ====================
+    (function initLeftPanel() {
+        const canvas = document.getElementById('left-canvas');
+        // 固定1024x1024内部渲染，通过CSS自适应
+        canvas.width = 1024;
+        canvas.height = 1024;
+        
+        let gl;
+        let glposition, glright, glforward, glup, glorigin, glx, gly, gllen;
+        let ang1 = 2.8, ang2 = 0.4;
+        let len = 1.6;
+        let cenx = 0.0, ceny = 0.0, cenz = 0.0;
+        let ml = 0, mr = 0, mm = 0;
+        let mx = 0, my = 0, mx1 = 0, my1 = 0, lasttimen = 0;
+        
+        // 原始Kernel (Mandelbulb 风格)
+        let KERNEL = `float kernal(vec3 ver){
+   vec3 a;
+float b,c,d,e;
+   a=ver;
+   for(int i=0;i<5;i++){
+       b=length(a);
+       c=atan(a.y,a.x)*8.0;
+       e=1.0/b;
+       d=acos(a.z/b)*8.0;
+       b=pow(b,8.0);
+       a=vec3(b*sin(d)*cos(c),b*sin(d)*sin(c),b*cos(d))+ver;
+       if(b>6.0){
+           break;
+       }
+   }
+   return 4.0-a.x*a.x-a.y*a.y-a.z*a.z;
+}`;
+        
+        const VSHADER_SOURCE = `#version 100
+precision highp float;
+attribute vec4 position;
+varying vec3 dir, localdir;
+uniform vec3 right, forward, up, origin;
+uniform float x,y;
+void main() {
+    gl_Position = position;
+    dir = forward + right * position.x*x + up * position.y*y;
+    localdir.x = position.x*x;
+    localdir.y = position.y*y;
+    localdir.z = -1.0;
+}`;
+        
+        const FSHADER_BASE = `#version 100
+#define PI 3.14159265358979324
+#define M_L 0.3819660113
+#define M_R 0.6180339887
+#define MAXR 8
+#define SOLVER 8
+precision highp float;
+float kernal(vec3 ver);
+uniform vec3 right, forward, up, origin;
+varying vec3 dir, localdir;
+uniform float len;
+vec3 ver;
+int sign;
+float v, v1, v2;
+float r1, r2, r3, r4, m1, m2, m3, m4;
+vec3 n, reflect;
+const float step = 0.002;
+vec3 color;
+void main() {
+    color.r=0.0; color.g=0.0; color.b=0.0;
+    sign=0;
+    v1 = kernal(origin + dir * (step*len));
+    v2 = kernal(origin);
+    for (int k = 2; k < 1002; k++) {
+        ver = origin + dir * (step*len*float(k));
+        v = kernal(ver);
+        if (v > 0.0 && v1 < 0.0) {
+            r1 = step * len*float(k - 1);
+            r2 = step * len*float(k);
+            m1 = kernal(origin + dir * r1);
+            m2 = kernal(origin + dir * r2);
+            for (int l = 0; l < SOLVER; l++) {
+                r3 = r1 * 0.5 + r2 * 0.5;
+                m3 = kernal(origin + dir * r3);
+                if (m3 > 0.0) { r2 = r3; m2 = m3; }
+                else { r1 = r3; m1 = m3; }
+            }
+            if (r3 < 2.0 * len) { sign=1; break; }
+        }
+        if (v < v1 && v1>v2 && v1 < 0.0 && (v1*2.0 > v || v1 * 2.0 > v2)) {
+            r1 = step * len*float(k - 2);
+            r2 = step * len*(float(k) - 2.0 + 2.0*M_L);
+            r3 = step * len*(float(k) - 2.0 + 2.0*M_R);
+            r4 = step * len*float(k);
+            m2 = kernal(origin + dir * r2);
+            m3 = kernal(origin + dir * r3);
+            for (int l = 0; l < MAXR; l++) {
+                if (m2 > m3) {
+                    r4 = r3; r3 = r2; r2 = r4 * M_L + r1 * M_R;
+                    m3 = m2; m2 = kernal(origin + dir * r2);
+                } else {
+                    r1 = r2; r2 = r3; r3 = r4 * M_R + r1 * M_L;
+                    m2 = m3; m3 = kernal(origin + dir * r3);
+                }
+            }
+            if (m2 > 0.0) {
+                r1 = step * len*float(k - 2); r2 = r2;
+                m1 = kernal(origin + dir * r1);
+                m2 = kernal(origin + dir * r2);
+                for (int l = 0; l < SOLVER; l++) {
+                    r3 = r1 * 0.5 + r2 * 0.5;
+                    m3 = kernal(origin + dir * r3);
+                    if (m3 > 0.0) { r2 = r3; m2 = m3; }
+                    else { r1 = r3; m1 = m3; }
+                }
+                if (r3 < 2.0 * len && r3> step*len) { sign=1; break; }
+            } else if (m3 > 0.0) {
+                r1 = step * len*float(k - 2); r2 = r3;
+                m1 = kernal(origin + dir * r1);
+                m2 = kernal(origin + dir * r2);
+                for (int l = 0; l < SOLVER; l++) {
+                    r3 = r1 * 0.5 + r2 * 0.5;
+                    m3 = kernal(origin + dir * r3);
+                    if (m3 > 0.0) { r2 = r3; m2 = m3; }
+                    else { r1 = r3; m1 = m3; }
+                }
+                if (r3 < 2.0 * len && r3> step*len) { sign=1; break; }
+            }
+        }
+        v2 = v1; v1 = v;
+    }
+    if (sign==1) {
+        ver = origin + dir*r3;
+        r1 = ver.x*ver.x+ver.y*ver.y+ver.z*ver.z;
+        n.x = kernal(ver - right * (r3*0.00025)) - kernal(ver + right * (r3*0.00025));
+        n.y = kernal(ver - up * (r3*0.00025)) - kernal(ver + up * (r3*0.00025));
+        n.z = kernal(ver + forward * (r3*0.00025)) - kernal(ver - forward * (r3*0.00025));
+        r3 = n.x*n.x+n.y*n.y+n.z*n.z;
+        n = n * (1.0 / sqrt(r3));
+        vec3 localnorm = localdir;
+        r3 = localnorm.x*localnorm.x+localnorm.y*localnorm.y+localnorm.z*localnorm.z;
+        localnorm = localnorm * (1.0 / sqrt(r3));
+        reflect = n * (-2.0*dot(localnorm, n)) + localnorm;
+        r3 = reflect.x*0.276+reflect.y*0.920+reflect.z*0.276;
+        r4 = n.x*0.276+n.y*0.920+n.z*0.276;
+        r3 = max(0.0,r3);
+        r3 = r3 * r3*r3*r3;
+        r3 = r3 * 0.45 + r4 * 0.25 + 0.3;
+        n.x = sin(r1*10.0)*0.5+0.5;
+        n.y = sin(r1*10.0+2.05)*0.5+0.5;
+        n.z = sin(r1*10.0-2.05)*0.5+0.5;
+        color = n*r3;
+    }
+    gl_FragColor = vec4(color, 1.0);
+}`;
+
+        function compileShader(gl, src, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, src);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+
+        function initWebGL() {
+            gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) { alert('左侧WebGL初始化失败'); return; }
+            
+            const vs = compileShader(gl, VSHADER_SOURCE, gl.VERTEX_SHADER);
+            const fs = compileShader(gl, FSHADER_BASE + KERNEL, gl.FRAGMENT_SHADER);
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error(gl.getProgramInfoLog(program));
+                return;
+            }
+            gl.useProgram(program);
+            
+            glposition = gl.getAttribLocation(program, 'position');
+            glright = gl.getUniformLocation(program, 'right');
+            glforward = gl.getUniformLocation(program, 'forward');
+            glup = gl.getUniformLocation(program, 'up');
+            glorigin = gl.getUniformLocation(program, 'origin');
+            glx = gl.getUniformLocation(program, 'x');
+            gly = gl.getUniformLocation(program, 'y');
+            gllen = gl.getUniformLocation(program, 'len');
+            
+            const positions = [-1,-1,0, 1,-1,0, 1,1,0, -1,-1,0, 1,1,0, -1,1,0];
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+            gl.vertexAttribPointer(glposition, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(glposition);
+            gl.viewport(0, 0, 1024, 1024);
+        }
+
+        function drawLeft() {
+            if (!gl) return;
+            const w = 1024, h = 1024;
+            gl.uniform1f(glx, w * 2.0 / (w + h));
+            gl.uniform1f(gly, h * 2.0 / (w + h));
+            gl.uniform1f(gllen, len);
+            gl.uniform3f(glorigin, len * Math.cos(ang1)*Math.cos(ang2) + cenx, len * Math.sin(ang2) + ceny, len * Math.sin(ang1)*Math.cos(ang2) + cenz);
+            gl.uniform3f(glright, Math.sin(ang1), 0, -Math.cos(ang1));
+            gl.uniform3f(glup, -Math.sin(ang2)*Math.cos(ang1), Math.cos(ang2), -Math.sin(ang2)*Math.sin(ang1));
+            gl.uniform3f(glforward, -Math.cos(ang1)*Math.cos(ang2), -Math.sin(ang2), -Math.sin(ang1)*Math.cos(ang2));
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            gl.finish();
+        }
+
+        // 事件绑定限制在左侧canvas区域
+        function bindEvents() {
+            const container = document.querySelector('.panel.left');
+            container.addEventListener('mousedown', (e) => {
+                if (e.button === 0) { ml = 1; mm = 0; }
+                if (e.button === 2) { mr = 1; mm = 0; }
+                mx = e.clientX; my = e.clientY;
+                e.preventDefault();
+            });
+            container.addEventListener('mouseup', (e) => {
+                if (e.button === 0) ml = 0;
+                if (e.button === 2) mr = 0;
+            });
+            container.addEventListener('mousemove', (e) => {
+                if (ml === 1) {
+                    ang1 += (e.clientX - mx) * 0.002;
+                    ang2 += (e.clientY - my) * 0.002;
+                    if (e.clientX !== mx || e.clientY !== my) mm = 1;
+                }
+                if (mr === 1) {
+                    const l = len * 4.0 / (1024 + 1024);
+                    cenx += l * (-(e.clientX - mx) * Math.sin(ang1) - (e.clientY - my) * Math.sin(ang2) * Math.cos(ang1));
+                    ceny += l * ((e.clientY - my) * Math.cos(ang2));
+                    cenz += l * ((e.clientX - mx) * Math.cos(ang1) - (e.clientY - my) * Math.sin(ang2) * Math.sin(ang1));
+                    if (e.clientX !== mx || e.clientY !== my) mm = 1;
+                }
+                mx = e.clientX; my = e.clientY;
+            });
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                len *= Math.exp(-0.001 * e.deltaY);
+            }, { passive: false });
+            container.addEventListener('contextmenu', (e) => { if (mm === 1) e.preventDefault(); });
+            
+            // 触摸事件简化版
+            container.addEventListener('touchstart', (e) => {
+                const t = e.touches;
+                if (t.length === 1) { mx = t[0].clientX; my = t[0].clientY; }
+                else if (t.length === 2) { mx = t[0].clientX; my = t[0].clientY; mx1 = t[1].clientX; my1 = t[1].clientY; }
+                lasttimen = t.length;
+            });
+            container.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const t = e.touches;
+                if (t.length === 1 && lasttimen === 1) {
+                    ang1 += (t[0].clientX - mx) * 0.002;
+                    ang2 += (t[0].clientY - my) * 0.002;
+                    mx = t[0].clientX; my = t[0].clientY;
+                } else if (t.length === 2) {
+                    const l = len * 2.0 / (1024+1024);
+                    cenx += l * (-(t[0].clientX+t[1].clientX-mx-mx1)*Math.sin(ang1) - (t[0].clientY+t[1].clientY-my-my1)*Math.sin(ang2)*Math.cos(ang1));
+                    ceny += l * ((t[0].clientY+t[1].clientY-my-my1)*Math.cos(ang2));
+                    cenz += l * ((t[0].clientX+t[1].clientX-mx-mx1)*Math.cos(ang1) - (t[0].clientY+t[1].clientY-my-my1)*Math.sin(ang2)*Math.sin(ang1));
+                    const l1 = Math.sqrt((mx-mx1)*(mx-mx1)+(my-my1)*(my-my1)+1);
+                    mx = t[0].clientX; my = t[0].clientY; mx1 = t[1].clientX; my1 = t[1].clientY;
+                    const l2 = Math.sqrt((mx-mx1)*(mx-mx1)+(my-my1)*(my-my1)+1);
+                    len *= l1 / l2;
+                }
+                lasttimen = t.length;
+            });
+            container.addEventListener('touchend', (e) => { lasttimen = e.touches.length; });
+        }
+
+        function animateLeft() {
+            ang1 += 0.01;
+            drawLeft();
+            requestAnimationFrame(animateLeft);
+        }
+
+        // UI配置
+        document.getElementById('left-config-btn').addEventListener('click', function() {
+            const panel = document.getElementById('left-config-panel');
+            const btn = this;
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            btn.textContent = panel.style.display === 'none' ? '⚙️ CONFIG' : '🔽 HIDE';
+        });
+        document.getElementById('left-kernel-code').value = KERNEL;
+        document.getElementById('left-apply').addEventListener('click', function() {
+            KERNEL = document.getElementById('left-kernel-code').value;
+            // 重新编译shader
+            const fs = compileShader(gl, FSHADER_BASE + KERNEL, gl.FRAGMENT_SHADER);
+            const program = gl.createProgram();
+            const vs = compileShader(gl, VSHADER_SOURCE, gl.VERTEX_SHADER);
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            gl.useProgram(program);
+            glposition = gl.getAttribLocation(program, 'position');
+            glright = gl.getUniformLocation(program, 'right');
+            glforward = gl.getUniformLocation(program, 'forward');
+            glup = gl.getUniformLocation(program, 'up');
+            glorigin = gl.getUniformLocation(program, 'origin');
+            glx = gl.getUniformLocation(program, 'x');
+            gly = gl.getUniformLocation(program, 'y');
+            gllen = gl.getUniformLocation(program, 'len');
+            document.getElementById('left-config-panel').style.display = 'none';
+            document.getElementById('left-config-btn').textContent = '⚙️ CONFIG';
+        });
+        document.getElementById('left-cancel').addEventListener('click', function() {
+            document.getElementById('left-kernel-code').value = KERNEL;
+            document.getElementById('left-config-panel').style.display = 'none';
+            document.getElementById('left-config-btn').textContent = '⚙️ CONFIG';
+        });
+
+        initWebGL();
+        bindEvents();
+        animateLeft();
+    })();
+
+    // ==================== 右侧逻辑 (5090D 暴力压力测试) ====================
+    (function initRightPanel() {
+        import('https://unpkg.com/three@0.128.0/build/three.module.js').then((THREE) => {
+            const canvas = document.getElementById('right-canvas');
+            const renderer = new THREE.WebGLRenderer({ 
+                canvas, 
+                antialias: true,
+                powerPreference: "high-performance"
+            });
+            
+            function resize() {
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                renderer.setSize(width, height);
+                renderer.setPixelRatio(Math.max(window.devicePixelRatio, 2));
+                if (material) {
+                    material.uniforms.u_resolution.value.set(width, height);
+                }
+                if (camera) {
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                }
+            }
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+            camera.position.z = 1;
+
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            let material = new THREE.ShaderMaterial({
+                uniforms: {
+                    u_time: { value: 0 },
+                    u_resolution: { value: new THREE.Vector2(canvas.clientWidth, canvas.clientHeight) }
+                },
+                vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+                fragmentShader: `
+                    precision highp float;
+                    uniform vec2 u_resolution;
+                    uniform float u_time;
+                    void main() {
+                        vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+                        vec3 col = vec3(0.0);
+                        float sum = 0.0;
+                        float x = uv.x * 20.0;
+                        float y = uv.y * 20.0;
+                        for(int i = 0; i < 256; i++) {
+                            float fi = float(i) * 0.1;
+                            float val = sin(x * 3.14159 + u_time * 0.5 + fi) * cos(y * 2.71828 - u_time * 0.3 + fi);
+                            val = pow(abs(val), 5.0);
+                            sum += val;
+                            x += sin(y * 0.1 + u_time) * 0.05;
+                            y += cos(x * 0.1 - u_time) * 0.05;
+                        }
+                        float noiseVal = fract(sum * 0.01);
+                        col.r = sin(uv.x * 30.0 + u_time) * 0.5 + 0.5;
+                        col.g = cos(uv.y * 40.0 - u_time * 0.5) * 0.5 + 0.5;
+                        col.b = sin((uv.x + uv.y) * 20.0 + u_time * 0.8) * 0.5 + 0.5;
+                        col += vec3(noiseVal * 0.8, noiseVal * 0.3, noiseVal);
+                        float grid = abs(fract(uv.x * 100.0) - 0.5) + abs(fract(uv.y * 100.0) - 0.5);
+                        col += grid * 0.2;
+                        gl_FragColor = vec4(col, 1.0);
+                    }
+                `
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            let frameCount = 0, lastTime = performance.now();
+            const fpsEl = document.getElementById('right-fps');
+
+            function animate() {
+                requestAnimationFrame(animate);
+                material.uniforms.u_time.value += 0.016;
+                renderer.render(scene, camera);
+                
+                frameCount++;
+                const now = performance.now();
+                if (now - lastTime >= 1000) {
+                    fpsEl.textContent = `FPS: ${Math.round((frameCount * 1000) / (now - lastTime))}`;
+                    frameCount = 0;
+                    lastTime = now;
+                }
+            }
+
+            window.addEventListener('resize', resize);
+            resize();
+            animate();
+        });
+    })();
+</script>
+</body>
+</html>
