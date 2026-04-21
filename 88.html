@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>5090D 极限压力测试 - 慎点</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            color: white;
+            font-family: monospace;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 8px;
+            pointer-events: none;
+            border-left: 4px solid #ff4444;
+        }
+        #fps {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 24px;
+            color: #00ff00;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>⚠️ RTX 5090D 极限压力舱</h2>
+        <p>分辨率: 4K+ | 片段复杂度: 极重 (1024次迭代/像素)</p>
+        <p>如果画面静止不动，说明浏览器已卡死或掉驱动</p>
+    </div>
+    <div id="fps">FPS: --</div>
+
+    <!-- 引入 Three.js 作为渲染载体 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- 初始化场景 (强制使用最高性能消耗配置) ---
+        const scene = new THREE.Scene();
+        
+        // 关键点：设置像素比为原生分辨率，不做限制，让 5090D 渲染每一个物理像素
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            powerPreference: "high-performance",
+            stencil: false,
+            depth: true
+        });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.max(window.devicePixelRatio, 2)); // 强制高倍采样
+        
+        document.body.appendChild(renderer.domElement);
+
+        // 创建一个覆盖全屏的正交相机
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+        camera.position.z = 1;
+
+        // 创建一个简单的平面几何体 (两个三角形组成一个矩形)
+        const geometry = new THREE.PlaneGeometry(2, 2);
+
+        // --- 核心：定制的“暴力”着色器材质 ---
+        // 这个着色器会在每个像素上执行大量三角函数和幂运算，专门针对 GPU 的 FP32 单元
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                u_time: { value: 0 },
+                u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+            },
+            vertexShader: `
+                void main() {
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                precision highp float;
+                uniform vec2 u_resolution;
+                uniform float u_time;
+                
+                void main() {
+                    // 归一化坐标
+                    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+                    
+                    // 颜色变量
+                    vec3 col = vec3(0.0);
+                    
+                    // === 性能炸弹核心 ===
+                    // 这里不是简单循环，而是利用每次迭代重新计算复杂的依赖关系
+                    // 编译器无法优化掉，必须老老实实算 512 次
+                    float sum = 0.0;
+                    float x = uv.x * 20.0;
+                    float y = uv.y * 20.0;
+                    
+                    // 第1重炸弹：正弦余弦嵌套 + 高次幂
+                    for(int i = 0; i < 256; i++) {
+                        float fi = float(i) * 0.1;
+                        // 每个像素点执行大量三角函数和幂运算
+                        float val = sin(x * 3.14159 + u_time * 0.5 + fi) * cos(y * 2.71828 - u_time * 0.3 + fi);
+                        val = pow(abs(val), 5.0); // 幂运算消耗很大
+                        sum += val;
+                        
+                        // 再加一层随机扰动计算
+                        x += sin(y * 0.1 + u_time) * 0.05;
+                        y += cos(x * 0.1 - u_time) * 0.05;
+                    }
+                    
+                    // 第2重炸弹：复杂的对数与指数混合 (针对 5090D 的 Tensor Core 无用武之地)
+                    float noiseVal = fract(sum * 0.01);
+                    
+                    // 生成极复杂的颜色混合，进一步消耗显存带宽
+                    col.r = sin(uv.x * 30.0 + u_time) * 0.5 + 0.5;
+                    col.g = cos(uv.y * 40.0 - u_time * 0.5) * 0.5 + 0.5;
+                    col.b = sin((uv.x + uv.y) * 20.0 + u_time * 0.8) * 0.5 + 0.5;
+                    
+                    // 将算出来的 sum 强行叠加，导致渲染管线因为依赖关系产生气泡
+                    col += vec3(noiseVal * 0.8, noiseVal * 0.3, noiseVal);
+                    
+                    // 使用高代价的 mod 和 abs 做边缘检测效果 (进一步压榨)
+                    float grid = abs(fract(uv.x * 100.0) - 0.5);
+                    grid += abs(fract(uv.y * 100.0) - 0.5);
+                    col += grid * 0.2;
+                    
+                    // 最终输出，强制开启 HDR 效果计算
+                    gl_FragColor = vec4(col, 1.0);
+                }
+            `
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        // --- FPS 监控 (看看 5090D 能不能稳住 60) ---
+        let frameCount = 0;
+        let lastTime = performance.now();
+        const fpsElement = document.getElementById('fps');
+
+        // --- 动画循环 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 更新 Uniform 时间
+            material.uniforms.u_time.value += 0.016; // 约 60fps 步进
+            
+            // 微小改变分辨率 Uniform 防止驱动优化掉重复计算
+            material.uniforms.u_resolution.value.x = window.innerWidth;
+            material.uniforms.u_resolution.value.y = window.innerHeight;
+            
+            renderer.render(scene, camera);
+            
+            // 计算 FPS
+            frameCount++;
+            const now = performance.now();
+            const delta = now - lastTime;
+            if (delta >= 1000) {
+                const fps = Math.round((frameCount * 1000) / delta);
+                fpsElement.textContent = `FPS: ${fps}`;
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+
+        animate();
+
+        // --- 窗口大小自适应 (继续拉满分辨率) ---
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.max(window.devicePixelRatio, 2));
+        }
+
+        // 警告提示
+        console.log('%c⚠️ 警告：此页面正在对 GPU 进行极限负载测试，可能导致系统卡顿或无响应。', 'font-size: 20px; color: red;');
+    </script>
+</body>
+</html>
