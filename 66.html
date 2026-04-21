@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>5090D 终极核弹 · GitHub Pages 专用</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Courier New', monospace;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #f55;
+            background: rgba(0,0,0,0.7);
+            padding: 12px 24px;
+            border-radius: 8px;
+            border-left: 6px solid #f00;
+            z-index: 100;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+        #stats {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #0fa;
+            background: rgba(0,0,0,0.6);
+            padding: 12px 25px;
+            border-radius: 40px;
+            font-size: 28px;
+            font-weight: bold;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+            border: 1px solid #0fa;
+        }
+        #cpu-badge {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #fa0;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #note {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #aaa;
+            background: rgba(0,0,0,0.4);
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 100;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h2>💀 双路极限负载 · 5090D 刑场</h2>
+        <p>GPU: 原生 WebGL 2.0 暴力渲染 | CPU: Web Workers 死循环</p>
+    </div>
+    <div id="note">⚡ GitHub Pages 专用 | 离线可用</div>
+    <div id="stats">FPS: --</div>
+    <div id="cpu-badge">💻 CPU Workers: 启动中...</div>
+
+    <script>
+        // ==================== 精简版 WebGL 渲染引擎 ====================
+        // 不依赖任何外部库，纯手写
+        
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        
+        const gl = canvas.getContext('webgl2', {
+            alpha: false,
+            antialias: true,
+            powerPreference: 'high-performance',
+            depth: true,
+            stencil: false
+        });
+        
+        if (!gl) {
+            document.getElementById('info').innerHTML = '<h2 style="color:red">❌ 浏览器不支持 WebGL 2.0</h2>';
+            throw new Error('WebGL2 not supported');
+        }
+        
+        // 工具函数
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+        
+        function createProgram(vsSource, fsSource) {
+            const vs = createShader(gl.VERTEX_SHADER, vsSource);
+            const fs = createShader(gl.FRAGMENT_SHADER, fsSource);
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vs);
+            gl.attachShader(prog, fs);
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                console.error(gl.getProgramInfoLog(prog));
+                return null;
+            }
+            return prog;
+        }
+        
+        // ==================== 顶点着色器（全屏Quad + 实例化粒子） ====================
+        const vsSource = `#version 300 es
+            precision highp float;
+            
+            layout(location = 0) in vec2 a_pos;
+            
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            
+            out vec2 v_uv;
+            out vec4 v_color;
+            
+            void main() {
+                v_uv = a_pos * 0.5 + 0.5;
+                gl_Position = vec4(a_pos, 0.0, 1.0);
+                
+                // 生成一些颜色变化
+                float r = sin(a_pos.x * 10.0 + u_time) * 0.5 + 0.5;
+                float g = cos(a_pos.y * 12.0 - u_time * 0.7) * 0.5 + 0.5;
+                float b = sin((a_pos.x + a_pos.y) * 8.0 + u_time * 1.2) * 0.5 + 0.5;
+                v_color = vec4(r, g, b, 1.0);
+            }
+        `;
+        
+        // ==================== 片段着色器（暴力光线步进 + 体积雾） ====================
+        const fsSource = `#version 300 es
+            precision highp float;
+            
+            in vec2 v_uv;
+            in vec4 v_color;
+            
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            
+            out vec4 fragColor;
+            
+            // 噪声函数
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+            }
+            
+            float noise(vec2 p) {
+                vec2 i = floor(p);
+                vec2 f = fract(p);
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
+                           mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+            }
+            
+            float fbm(vec2 p) {
+                float sum = 0.0;
+                float amp = 0.5;
+                float freq = 4.0;
+                for(int i = 0; i < 8; i++) {
+                    sum += amp * noise(p * freq);
+                    amp *= 0.5;
+                    freq *= 2.0;
+                }
+                return sum;
+            }
+            
+            void main() {
+                vec2 uv = v_uv;
+                vec2 p = uv * 4.0 - 2.0;
+                
+                vec3 col = vec3(0.0);
+                
+                // ===== 第一重炸弹：体积光步进（每像素128步） =====
+                float density = 0.0;
+                vec2 stepPos = p;
+                
+                for(int i = 0; i < 128; i++) {
+                    float fi = float(i) * 0.1;
+                    
+                    // 扭曲坐标
+                    vec2 offset = vec2(
+                        sin(stepPos.y * 5.0 + u_time * 0.5 + fi),
+                        cos(stepPos.x * 4.0 - u_time * 0.3 + fi)
+                    ) * 0.03;
+                    
+                    stepPos += offset;
+                    
+                    // 采样噪声
+                    float n1 = fbm(stepPos * 2.0 + u_time * 0.1);
+                    float n2 = fbm(stepPos * 3.5 - u_time * 0.15);
+                    float n3 = fbm(stepPos * 5.0 + u_time * 0.2);
+                    
+                    float d = (n1 * 0.5 + n2 * 0.3 + n3 * 0.2);
+                    density += d * 0.02;
+                    
+                    // 累加颜色
+                    vec3 stepCol = vec3(n1, n2, n3) * exp(-density * 0.3);
+                    col += stepCol * 0.05;
+                }
+                
+                // ===== 第二重炸弹：复杂后处理 =====
+                // 多层正弦波叠加
+                for(int j = 0; j < 64; j++) {
+                    float fj = float(j) * 0.05;
+                    col.r += sin(uv.x * 80.0 + u_time * 3.0 + fj) * 0.015;
+                    col.g += cos(uv.y * 90.0 - u_time * 2.5 + fj) * 0.015;
+                    col.b += sin((uv.x + uv.y) * 70.0 + u_time * 3.5 + fj) * 0.015;
+                }
+                
+                // 幂运算和伽马
+                col = pow(col, vec3(1.5));
+                
+                // ===== 第三重炸弹：Mandelbrot 采样 =====
+                vec2 c = (uv - 0.5) * 3.0;
+                vec2 z = vec2(0.0);
+                float iter = 0.0;
+                for(int k = 0; k < 50; k++) {
+                    if(dot(z, z) > 4.0) break;
+                    z = vec2(z.x*z.x - z.y*z.y, 2.0*z.x*z.y) + c;
+                    iter += 1.0;
+                }
+                float m = iter / 50.0;
+                col = mix(col, vec3(m * 0.8, m * 0.5, m), 0.3);
+                
+                // 混合顶点颜色
+                col += v_color.rgb * 0.2;
+                
+                // 暗角
+                float vignette = 1.0 - length(uv - 0.5) * 0.7;
+                col *= vignette;
+                
+                // 扫描线效果（增加计算量）
+                float scanline = sin(uv.y * u_resolution.y * 2.0) * 0.1 + 0.9;
+                col *= scanline;
+                
+                fragColor = vec4(col, 1.0);
+            }
+        `;
+        
+        // 编译程序
+        const program = createProgram(vsSource, fsSource);
+        gl.useProgram(program);
+        
+        // 全屏四边形顶点
+        const vertices = new Float32Array([
+            -1, -1,  1, -1, -1,  1,
+            -1,  1,  1, -1,  1,  1
+        ]);
+        
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+        
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        
+        const posLoc = gl.getAttribLocation(program, 'a_pos');
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+        
+        // Uniform 位置
+        const timeLoc = gl.getUniformLocation(program, 'u_time');
+        const resLoc = gl.getUniformLocation(program, 'u_resolution');
+        
+        // 视口设置
+        function resize() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            canvas.width = w * 1.5;  // 超采样
+            canvas.height = h * 1.5;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.uniform2f(resLoc, canvas.width, canvas.height);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+        
+        // FPS 计数器
+        const fpsEl = document.getElementById('stats');
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let startTime = Date.now();
+        
+        // 渲染循环
+        function render() {
+            requestAnimationFrame(render);
+            
+            const time = (Date.now() - startTime) / 1000;
+            gl.uniform1f(timeLoc, time);
+            
+            gl.clearColor(0.02, 0.02, 0.05, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            
+            gl.bindVertexArray(vao);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            
+            // FPS 更新
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 200) {
+                const fps = Math.round((frameCount * 1000) / (now - lastTime));
+                fpsEl.textContent = `FPS: ${fps}`;
+                frameCount = 0;
+                lastTime = now;
+            }
+        }
+        
+        render();
+        
+        console.log('%c🔥 GPU 核弹已启动', 'color: red; font-size: 18px;');
+    </script>
+
+    <!-- ==================== CPU 压榨模块 ==================== -->
+    <script>
+        (function() {
+            const cores = navigator.hardwareConcurrency || 8;
+            const workerCount = Math.min(cores, 12);
+            
+            document.getElementById('cpu-badge').textContent = `💻 CPU Workers: ${workerCount} (满载中)`;
+            
+            // Worker 代码
+            const workerBlob = new Blob([`
+                function isPrime(n) {
+                    if (n < 2) return false;
+                    const limit = Math.sqrt(n);
+                    for (let i = 2; i <= limit; i++) {
+                        if (n % i === 0) return false;
+                    }
+                    return true;
+                }
+                
+                function fib(n) {
+                    if (n <= 1) return n;
+                    let a = 0, b = 1;
+                    for (let i = 2; i <= n; i++) {
+                        [a, b] = [b, a + b];
+                    }
+                    return b;
+                }
+                
+                function mandelbrot(cr, ci, maxIter) {
+                    let zr = 0, zi = 0, n = 0;
+                    while (zr*zr + zi*zi <= 4.0 && n < maxIter) {
+                        const tmp = zr*zr - zi*zi + cr;
+                        zi = 2.0*zr*zi + ci;
+                        zr = tmp;
+                        n++;
+                    }
+                    return n;
+                }
+                
+                let primeNum = 1000000000;
+                let fibIdx = 2000;
+                let counter = 0;
+                
+                function heavy() {
+                    for (let i = 0; i < 300; i++) isPrime(primeNum + i);
+                    primeNum += 300;
+                    
+                    for (let i = 0; i < 80; i++) fib(fibIdx + i);
+                    fibIdx = (fibIdx + 80) % 4000 + 1000;
+                    
+                    for (let j = 0; j < 80; j++) {
+                        const cr = -0.8 + (counter % 200) * 0.008;
+                        const ci = 0.2 + j * 0.01;
+                        mandelbrot(cr, ci, 120);
+                    }
+                    
+                    counter++;
+                    setTimeout(heavy, 0);
+                }
+                
+                heavy();
+            `], { type: 'application/javascript' });
+            
+            const workers = [];
+            for (let i = 0; i < workerCount; i++) {
+                workers.push(new Worker(URL.createObjectURL(workerBlob)));
+            }
+            
+            // 主线程也干活
+            function mainLoad() {
+                let sum = 0;
+                for (let i = 0; i < 150000; i++) {
+                    sum += Math.sin(i * 0.001) * Math.cos(i * 0.002);
+                    sum += Math.tan(i * 0.0005);
+                }
+                
+                const el = document.getElementById('cpu-badge');
+                el.style.opacity = (Math.sin(Date.now() * 0.01) * 0.3 + 0.7).toString();
+                
+                setTimeout(mainLoad, 0);
+            }
+            mainLoad();
+            
+            window.addEventListener('beforeunload', () => workers.forEach(w => w.terminate()));
+            
+            console.log('%c⚡ CPU 核弹已启动', 'color: orange; font-size: 18px;');
+        })();
+    </script>
+</body>
+</html>
